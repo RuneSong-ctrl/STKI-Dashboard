@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable no-unused-vars */
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
+import Markdown from "react-markdown";
 import {
   Search,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ import {
   ShieldAlert,
   Loader2,
   CheckCircle,
+  ChevronDown,
 } from "lucide-react";
 import {
   XAxis,
@@ -38,7 +40,52 @@ import {
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 
-const COLORS = ["#000000", "#666666", "#CCCCCC"];
+const COLORS = ["#000000", "#555555", "#888888", "#AAAAAA", "#CCCCCC"];
+
+const CustomBarTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-black text-white border border-neutral-600 p-3 font-mono text-[10px] sm:text-xs uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] z-50">
+        <p className="font-black border-b border-neutral-700 pb-2 mb-2 tracking-widest">
+          TAHUN {label}
+        </p>
+        <div className="space-y-1.5">
+          {payload.map((entry, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between gap-6"
+            >
+              <span className="text-neutral-400 tracking-wider">
+                {entry.name}
+              </span>
+              <span className="font-black text-white">{entry.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-black text-white border border-neutral-600 p-3 font-mono text-[10px] sm:text-xs uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] z-50 max-w-50 sm:max-w-62.5">
+        <p className="font-black border-b border-neutral-700 pb-2 mb-2 tracking-widest wrap-break-word leading-relaxed">
+          {payload[0].name}
+        </p>
+        <div className="flex items-center justify-between gap-4 mt-2">
+          <span className="text-neutral-400 tracking-wider">TOTAL BERKAS:</span>
+          <span className="font-black text-lg text-white">
+            {payload[0].value}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 const App = () => {
   const [currentView, setCurrentView] = useState("public");
@@ -47,6 +94,12 @@ const App = () => {
   const [selectedTheme, setSelectedTheme] = useState("Semua");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [isYearOpen, setIsYearOpen] = useState(false);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [isAdminYearOpen, setIsAdminYearOpen] = useState(false);
+  const [isAdminThemeOpen, setIsAdminThemeOpen] = useState(false);
+  const [isAdminCategoryOpen, setIsAdminCategoryOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [dbData, setDbData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,11 +107,11 @@ const App = () => {
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadAuthor, setUploadAuthor] = useState("");
   const [uploadYear, setUploadYear] = useState(2026);
-  const [uploadTheme, setUploadTheme] = useState("AI");
-  const [uploadCategory, setUploadCategory] = useState("Sains & Teknologi");
+  const [uploadTheme, setUploadTheme] = useState("AI & Machine Learning");
+  const [uploadCategory, setUploadCategory] = useState("Penelitian");
   const [uploadAbstract, setUploadAbstract] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  
+
   const [isExtracting, setIsExtracting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -72,13 +125,31 @@ const App = () => {
     },
   ]);
 
-  const themes = ["Semua", "AI", "Digital Media", "GIS", "Blockchain"];
+  const themes = [
+    "Semua",
+    "AI & Machine Learning",
+    "IoT & Smart Systems",
+    "Keamanan Data & Kriptografi",
+    "Data Science",
+    "Rekayasa Perangkat Lunak",
+    "HealthTech & IoMT",
+    "AgriTech",
+    "Gamifikasi & EdTech",
+    "Media Digital",
+    "GIS",
+    "Blockchain",
+    "Lainnya",
+  ];
   const years = ["Semua", 2022, 2023, 2024, 2025, 2026];
   const categories = [
     "Semua",
-    "Sains & Teknologi",
-    "Sosial Humaniora",
-    "Ekonomi",
+    "Penelitian",
+    "Pengabdian Kepada Masyarakat",
+    "Jurnal Internasional",
+    "Jurnal Internasional Bereputasi",
+    "Jurnal Nasional Terakreditasi (Sinta 1-5)",
+    "Seminar Nasional/Internasional",
+    "HKI",
   ];
 
   const fetchJournals = async () => {
@@ -113,17 +184,20 @@ const App = () => {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:8000/api/extract-metadata", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        "http://localhost:8000/api/extract-metadata",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
       if (response.ok) {
         const meta = await response.json();
         setUploadTitle(meta.title || "");
         setUploadAuthor(meta.author || "");
         setUploadYear(Number(meta.year) || 2026);
-        setUploadCategory(meta.category || "Sains & Teknologi");
-        setUploadTheme(meta.theme || "AI");
+        setUploadCategory(meta.category || "Penelitian");
+        setUploadTheme(meta.theme || "AI & Machine Learning");
         setUploadAbstract(meta.abstract || "");
       }
     } catch (error) {
@@ -215,13 +289,11 @@ const App = () => {
       const items = dbData.filter((d) => String(d.year) === yr);
       return {
         year: yr,
-        "Sains & Teknologi": items.filter(
-          (i) => i.category === "Sains & Teknologi",
+        Penelitian: items.filter((i) => i.category === "Penelitian").length,
+        Pengabdian: items.filter(
+          (i) => i.category === "Pengabdian Kepada Masyarakat",
         ).length,
-        "Sosial Humaniora": items.filter(
-          (i) => i.category === "Sosial Humaniora",
-        ).length,
-        Ekonomi: items.filter((i) => i.category === "Ekonomi").length,
+        Jurnal: items.filter((i) => i.category.includes("Jurnal")).length,
       };
     });
   }, [dbData]);
@@ -242,8 +314,8 @@ const App = () => {
       <header className="border-b border-black sticky top-0 bg-white z-40">
         <div className="max-w-7xl mx-auto h-20 sm:h-24 px-4 sm:px-6 flex items-center justify-between">
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4">
-            <span 
-              onClick={() => setCurrentView("public")} 
+            <span
+              onClick={() => setCurrentView("public")}
               className="text-xl sm:text-2xl font-black tracking-tighter cursor-pointer select-none"
             >
               UNUD // REPOSITORY
@@ -254,10 +326,16 @@ const App = () => {
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <button
-              onClick={() => setCurrentView(currentView === "public" ? "admin" : "public")}
+              onClick={() =>
+                setCurrentView(currentView === "public" ? "admin" : "public")
+              }
               className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-black border border-black text-[11px] sm:text-xs uppercase tracking-wider font-bold hover:bg-neutral-200 transition-all cursor-pointer"
             >
-              {currentView === "public" ? <ShieldAlert size={14} /> : <LayoutDashboard size={14} />}
+              {currentView === "public" ? (
+                <ShieldAlert size={14} />
+              ) : (
+                <LayoutDashboard size={14} />
+              )}
               {currentView === "public" ? "Admin Desk" : "Public View"}
             </button>
             <button
@@ -298,53 +376,134 @@ const App = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="border border-black p-3 flex flex-col justify-between bg-white">
+                  <div className="border border-black p-3 bg-white relative flex flex-col justify-between">
                     <label className="text-[10px] text-neutral-400 uppercase tracking-widest block mb-2">
                       Tema Riset
                     </label>
-                    <select
-                      value={selectedTheme}
-                      onChange={(e) => setSelectedTheme(e.target.value)}
-                      className="bg-transparent w-full text-xs font-bold uppercase focus:outline-none cursor-pointer"
+                    <div
+                      onClick={() => setIsThemeOpen(!isThemeOpen)}
+                      className="flex items-center justify-between cursor-pointer w-full"
                     >
-                      {themes.map((t) => (
-                        <option key={t} value={t} className="font-mono text-black">
-                          {t}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-xs font-bold uppercase truncate pr-2">
+                        {selectedTheme}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`transform transition-transform ${isThemeOpen ? "rotate-180" : ""}`}
+                      />
+                    </div>
+                    <AnimatePresence>
+                      {isThemeOpen && (
+                        <motion.ul
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto"
+                        >
+                          {themes.map((t) => (
+                            <li
+                              key={t}
+                              onClick={() => {
+                                setSelectedTheme(t);
+                                setIsThemeOpen(false);
+                              }}
+                              className={`px-3 py-2 text-xs font-mono font-bold uppercase cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                selectedTheme === t ? "bg-neutral-100" : ""
+                              }`}
+                            >
+                              {t}
+                            </li>
+                          ))}
+                        </motion.ul>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div className="border border-black p-3 flex flex-col justify-between bg-white">
+                  <div className="border border-black p-3 bg-white relative flex flex-col justify-between">
                     <label className="text-[10px] text-neutral-400 uppercase tracking-widest block mb-2">
                       Tahun Publikasi
                     </label>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(e.target.value)}
-                      className="bg-transparent w-full text-xs font-bold uppercase focus:outline-none cursor-pointer"
+                    <div
+                      onClick={() => setIsYearOpen(!isYearOpen)}
+                      className="flex items-center justify-between cursor-pointer w-full"
                     >
-                      {years.map((y) => (
-                        <option key={y} value={y} className="font-mono text-black">
-                          {y}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-xs font-bold uppercase truncate pr-2">
+                        {selectedYear}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`transform transition-transform ${isYearOpen ? "rotate-180" : ""}`}
+                      />
+                    </div>
+                    <AnimatePresence>
+                      {isYearOpen && (
+                        <motion.ul
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto"
+                        >
+                          {years.map((y) => (
+                            <li
+                              key={y}
+                              onClick={() => {
+                                setSelectedYear(y);
+                                setIsYearOpen(false);
+                              }}
+                              className={`px-3 py-2 text-xs font-mono font-bold uppercase cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                selectedYear === y ? "bg-neutral-100" : ""
+                              }`}
+                            >
+                              {y}
+                            </li>
+                          ))}
+                        </motion.ul>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div className="border border-black p-3 flex flex-col justify-between bg-white">
+                  <div className="border border-black p-3 bg-white relative flex flex-col justify-between">
                     <label className="text-[10px] text-neutral-400 uppercase tracking-widest block mb-2">
                       Kategori Jurnal
                     </label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="bg-transparent w-full text-xs font-bold uppercase focus:outline-none cursor-pointer"
+                    <div
+                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                      className="flex items-center justify-between cursor-pointer w-full"
                     >
-                      {categories.map((c) => (
-                        <option key={c} value={c} className="font-mono text-black">
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-xs font-bold uppercase truncate pr-2">
+                        {selectedCategory}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`transform transition-transform ${isCategoryOpen ? "rotate-180" : ""}`}
+                      />
+                    </div>
+                    <AnimatePresence>
+                      {isCategoryOpen && (
+                        <motion.ul
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto"
+                        >
+                          {categories.map((c) => (
+                            <li
+                              key={c}
+                              onClick={() => {
+                                setSelectedCategory(c);
+                                setIsCategoryOpen(false);
+                              }}
+                              className={`px-3 py-2 text-xs font-mono font-bold uppercase cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                selectedCategory === c ? "bg-neutral-100" : ""
+                              }`}
+                            >
+                              {c}
+                            </li>
+                          ))}
+                        </motion.ul>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               </div>
@@ -430,8 +589,8 @@ const App = () => {
                   </div>
                   <TrendingUp size={14} className="text-neutral-400" />
                 </div>
-                <div className="h-64 w-full font-mono overflow-visible">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-64 w-full font-mono overflow-visible min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart
                       data={barChartData}
                       margin={{ top: 20, right: 15, left: -25, bottom: 20 }}
@@ -457,13 +616,8 @@ const App = () => {
                         tickLine={false}
                       />
                       <Tooltip
-                        contentStyle={{
-                          background: "#000",
-                          color: "#FFF",
-                          borderRadius: "0px",
-                          fontFamily: "monospace",
-                          fontSize: "10px",
-                        }}
+                        content={<CustomBarTooltip />}
+                        cursor={{ fill: "#f5f5f5" }}
                       />
                       <Legend
                         verticalAlign="top"
@@ -475,9 +629,9 @@ const App = () => {
                           paddingBottom: "15px",
                         }}
                       />
-                      <Bar dataKey="Sains & Teknologi" fill="#000000" />
-                      <Bar dataKey="Sosial Humaniora" fill="#666666" />
-                      <Bar dataKey="Ekonomi" fill="#CCCCCC" />
+                      <Bar dataKey="Penelitian" fill="#000000" />
+                      <Bar dataKey="Pengabdian" fill="#666666" />
+                      <Bar dataKey="Jurnal" fill="#CCCCCC" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -492,8 +646,8 @@ const App = () => {
                     </h3>
                   </div>
                 </div>
-                <div className="h-64 w-full font-mono flex flex-col items-center justify-center">
-                  <ResponsiveContainer width="100%" height="80%">
+                <div className="h-64 w-full font-mono flex flex-col items-center justify-center min-w-0">
+                  <ResponsiveContainer width="100%" height="80%" minWidth={0}>
                     <PieChart>
                       <Pie
                         data={pieChartData}
@@ -511,15 +665,7 @@ const App = () => {
                           />
                         ))}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          background: "#000",
-                          color: "#FFF",
-                          borderRadius: "0px",
-                          fontFamily: "monospace",
-                          fontSize: "10px",
-                        }}
-                      />
+                      <Tooltip content={<CustomPieTooltip />} />
                       <Legend
                         verticalAlign="bottom"
                         layout="horizontal"
@@ -547,22 +693,32 @@ const App = () => {
             className="max-w-7xl mx-auto lg:border-x border-black min-h-[calc(100vh-6rem)] p-4 sm:p-8 md:p-12 space-y-8 bg-neutral-50"
           >
             <div className="border-b border-black pb-4">
-              <h2 className="text-xl font-black uppercase tracking-tight">Admin Control Desk</h2>
-              <p className="text-xs text-neutral-500 mt-1">Sistem Otomasi Ekstraksi dan Pengindeksan Berkas Repositori</p>
+              <h2 className="text-xl font-black uppercase tracking-tight">
+                Admin Control Desk
+              </h2>
+              <p className="text-xs text-neutral-500 mt-1">
+                Sistem Otomasi Ekstraksi dan Pengindeksan Berkas Repositori
+              </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-5 space-y-6">
                 <div className="border-2 border-black p-6 bg-white space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest border-b border-black pb-2">1. Pemuatan Manuskrip Mentah</h3>
+                  <h3 className="text-xs font-black uppercase tracking-widest border-b border-black pb-2">
+                    1. Pemuatan Manuskrip Mentah
+                  </h3>
                   <p className="text-xs text-neutral-600 leading-relaxed">
-                    Unggah dokumen PDF asli. Sistem AI akan secara otomatis memindai lembar halaman awal untuk mendeteksi Judul, Penulis, Abstrak, dan skema kluster data terkait.
+                    Unggah dokumen PDF asli. Sistem AI akan secara otomatis
+                    memindai lembar halaman awal untuk mendeteksi Judul,
+                    Penulis, Abstrak, dan skema kluster data terkait.
                   </p>
-                  
+
                   <label className="flex flex-col items-center gap-3 justify-center border-2 border-dashed border-black p-8 bg-neutral-50 hover:bg-neutral-100 cursor-pointer transition-all text-center">
                     <Upload size={24} className="text-neutral-700" />
                     <span className="text-xs font-bold uppercase tracking-wider">
-                      {selectedFile ? selectedFile.name : "PILIH FILE PDF JURNAL"}
+                      {selectedFile
+                        ? selectedFile.name
+                        : "PILIH FILE PDF JURNAL"}
                     </span>
                     <input
                       type="file"
@@ -582,7 +738,7 @@ const App = () => {
                   {uploadSuccess && (
                     <div className="flex items-center gap-2 justify-center text-xs font-bold text-emerald-700 bg-emerald-50 p-3 border border-emerald-300">
                       <CheckCircle size={14} />
-                      BERKAS MANUSKRIP BERHASIL TERINDEKS
+                      BERKAS BERHASIL TERINDEKS
                     </div>
                   )}
                 </div>
@@ -593,11 +749,15 @@ const App = () => {
                   onSubmit={handleUploadSubmit}
                   className="border-2 border-black p-6 bg-white space-y-4"
                 >
-                  <h3 className="text-xs font-black uppercase tracking-widest border-b border-black pb-2">2. Hasil Ekstraksi & Validasi Form</h3>
-                  
+                  <h3 className="text-xs font-black uppercase tracking-widest border-b border-black pb-2">
+                    2. Hasil Ekstraksi & Validasi Form
+                  </h3>
+
                   <div className="space-y-4 text-xs">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Judul Manuskrip Ilmiah</label>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                        Judul Manuskrip Ilmiah
+                      </label>
                       <input
                         type="text"
                         placeholder="JUDUL DOKUMEN"
@@ -609,7 +769,9 @@ const App = () => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Nama Lengkap Penulis</label>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                        Nama Lengkap Penulis
+                      </label>
                       <input
                         type="text"
                         placeholder="NAMA PENULIS"
@@ -621,48 +783,145 @@ const App = () => {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Tahun Publikasi</label>
-                        <select
-                          value={uploadYear}
-                          onChange={(e) => setUploadYear(Number(e.target.value))}
-                          className="w-full p-2.5 bg-white border border-black font-mono uppercase focus:outline-none cursor-pointer"
+                      <div className="flex flex-col gap-1 relative">
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                          Tahun Publikasi
+                        </label>
+                        <div
+                          onClick={() => setIsAdminYearOpen(!isAdminYearOpen)}
+                          className="w-full p-2.5 bg-white border border-black font-mono uppercase tracking-wider flex items-center justify-between cursor-pointer"
                         >
-                          {years.filter((y) => y !== "Semua").map((y) => (
-                            <option key={y} value={y}>{y}</option>
-                          ))}
-                        </select>
+                          <span>{uploadYear}</span>
+                          <ChevronDown
+                            size={14}
+                            className={`transform transition-transform ${isAdminYearOpen ? "rotate-180" : ""}`}
+                          />
+                        </div>
+                        <AnimatePresence>
+                          {isAdminYearOpen && (
+                            <motion.ul
+                              initial={{ opacity: 0, y: -5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -5 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto font-mono text-xs uppercase"
+                            >
+                              {years
+                                .filter((y) => y !== "Semua")
+                                .map((y) => (
+                                  <li
+                                    key={y}
+                                    onClick={() => {
+                                      setUploadYear(Number(y));
+                                      setIsAdminYearOpen(false);
+                                    }}
+                                    className={`px-3 py-2 cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                      uploadYear === y ? "bg-neutral-100" : ""
+                                    }`}
+                                  >
+                                    {y}
+                                  </li>
+                                ))}
+                            </motion.ul>
+                          )}
+                        </AnimatePresence>
                       </div>
 
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Tema Riset</label>
-                        <select
-                          value={uploadTheme}
-                          onChange={(e) => setUploadTheme(e.target.value)}
-                          className="w-full p-2.5 bg-white border border-black font-mono uppercase focus:outline-none cursor-pointer"
+                      <div className="flex flex-col gap-1 relative">
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                          Tema Riset
+                        </label>
+                        <div
+                          onClick={() => setIsAdminThemeOpen(!isAdminThemeOpen)}
+                          className="w-full p-2.5 bg-white border border-black font-mono uppercase tracking-wider flex items-center justify-between cursor-pointer"
                         >
-                          {themes.filter((t) => t !== "Semua").map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
+                          <span className="truncate pr-2">{uploadTheme}</span>
+                          <ChevronDown
+                            size={14}
+                            className={`transform transition-transform ${isAdminThemeOpen ? "rotate-180" : ""}`}
+                          />
+                        </div>
+                        <AnimatePresence>
+                          {isAdminThemeOpen && (
+                            <motion.ul
+                              initial={{ opacity: 0, y: -5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -5 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto font-mono text-xs uppercase"
+                            >
+                              {themes
+                                .filter((t) => t !== "Semua")
+                                .map((t) => (
+                                  <li
+                                    key={t}
+                                    onClick={() => {
+                                      setUploadTheme(t);
+                                      setIsAdminThemeOpen(false);
+                                    }}
+                                    className={`px-3 py-2 cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                      uploadTheme === t ? "bg-neutral-100" : ""
+                                    }`}
+                                  >
+                                    {t}
+                                  </li>
+                                ))}
+                            </motion.ul>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Kategori Jurnal</label>
-                      <select
-                        value={uploadCategory}
-                        onChange={(e) => setUploadCategory(e.target.value)}
-                        className="w-full p-2.5 bg-white border border-black font-mono uppercase focus:outline-none cursor-pointer"
+                    <div className="flex flex-col gap-1 relative">
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                        Kategori Jurnal
+                      </label>
+                      <div
+                        onClick={() =>
+                          setIsAdminCategoryOpen(!isAdminCategoryOpen)
+                        }
+                        className="w-full p-2.5 bg-white border border-black font-mono uppercase tracking-wider flex items-center justify-between cursor-pointer"
                       >
-                        {categories.filter((c) => c !== "Semua").map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                        <span className="truncate pr-2">{uploadCategory}</span>
+                        <ChevronDown
+                          size={14}
+                          className={`transform transition-transform ${isAdminCategoryOpen ? "rotate-180" : ""}`}
+                        />
+                      </div>
+                      <AnimatePresence>
+                        {isAdminCategoryOpen && (
+                          <motion.ul
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -5 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute left-0 top-[calc(100%+2px)] w-full bg-white border border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-50 max-h-48 overflow-y-auto font-mono text-xs uppercase"
+                          >
+                            {categories
+                              .filter((c) => c !== "Semua")
+                              .map((c) => (
+                                <li
+                                  key={c}
+                                  onClick={() => {
+                                    setUploadCategory(c);
+                                    setIsAdminCategoryOpen(false);
+                                  }}
+                                  className={`px-3 py-2 cursor-pointer transition-colors hover:bg-black hover:text-white ${
+                                    uploadCategory === c ? "bg-neutral-100" : ""
+                                  }`}
+                                >
+                                  {c}
+                                </li>
+                              ))}
+                          </motion.ul>
+                        )}
+                      </AnimatePresence>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Abstrak Dokumen</label>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                        Abstrak Dokumen
+                      </label>
                       <textarea
                         rows={6}
                         placeholder="ABSTRAK PENELITIAN"
@@ -679,7 +938,9 @@ const App = () => {
                     disabled={isUploading || !selectedFile}
                     className="w-full py-3 bg-black text-white text-xs font-black uppercase tracking-widest hover:bg-neutral-800 transition-all border border-black cursor-pointer disabled:opacity-30"
                   >
-                    {isUploading ? "MENGEKSTRAKSI & MENYIMPAN..." : "KONFIRMASI & INDEKS PUBLIKASI"}
+                    {isUploading
+                      ? "MENGEKSTRAKSI & MENYIMPAN..."
+                      : "KONFIRMASI & INDEKS PUBLIKASI"}
                   </button>
                 </form>
               </div>
@@ -740,10 +1001,18 @@ const App = () => {
                       className={`p-4 sm:p-5 max-w-[95%] sm:max-w-[90%] text-sm leading-relaxed border ${
                         msg.role === "user"
                           ? "bg-black text-white border-black font-mono text-xs uppercase tracking-wider"
-                          : "bg-neutral-50 text-black border-neutral-200"
+                          : "bg-neutral-50 text-black border-neutral-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                       }`}
                     >
-                      {msg.content}
+                      <div
+                        className={
+                          msg.role === "user"
+                            ? "whitespace-pre-wrap font-mono text-xs uppercase tracking-wider"
+                            : "prose prose-sm max-w-none font-sans text-neutral-800 whitespace-pre-wrap prose-headings:font-mono prose-headings:font-black prose-headings:text-black prose-strong:text-black prose-ul:list-disc prose-ul:pl-4 prose-ol:list-decimal prose-ol:pl-4"
+                        }
+                      >
+                        <Markdown>{msg.content}</Markdown>
+                      </div>
                     </div>
 
                     {msg.sources && msg.sources.length > 0 && (

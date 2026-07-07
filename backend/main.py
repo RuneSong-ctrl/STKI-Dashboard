@@ -93,38 +93,52 @@ async def extract_metadata(file: UploadFile = File(...)):
             )
             
         prompt = (
-            "Analyze the following text extracted from the beginning of an academic paper. "
-            "Extract the exact metadata values and output strictly a valid JSON object. "
-            "The JSON must have exactly these keys: 'title', 'author', 'abstract', 'year', 'category', 'theme'.\n\n"
-            "Constraints:\n"
-            "1. 'title': Extracted full title of the paper.\n"
-            "2. 'author': Extracted main authors formatted as a single string comma-separated.\n"
-            "3. 'abstract': A clean text summary of the abstract found in the paper.\n"
-            "4. 'year': Extracted publication year as an integer number. Use 2026 if not found.\n"
-            "5. 'category': Must be strictly one of these values: 'Sains & Teknologi', 'Sosial Humaniora', 'Ekonomi'. Choose based on subject context.\n"
-            "6. 'theme': Must be strictly one of these values: 'AI', 'Digital Media', 'GIS', 'Blockchain'. Choose the best match.\n\n"
-            "Do not add any conversational markdown block text, explanations or backticks around the JSON code structure. Output raw JSON format only.\n\n"
-            f"TEXT CONTENT:\n{sample_text[:4000]}"
+            "Anda adalah asisten AI untuk ekstraksi data. Ekstrak metadata dari teks dokumen akademik berikut menjadi satu objek JSON yang valid.\n"
+            "PENTING: Seluruh isi teks yang diekstrak, khususnya bagian 'abstract' (abstrak), WAJIB diterjemahkan dan ditulis dalam Bahasa Indonesia yang baik dan benar.\n\n"
+            "Aturan Format JSON:\n"
+            "1. Output HANYA berupa objek JSON mentah. Jangan gunakan markdown backtick (```), jangan tambahkan teks pengantar, dan jangan tambahkan teks penutup.\n"
+            "2. Gunakan backslash untuk escape character jika ada tanda kutip ganda di dalam teks (contoh: \\\"teks\\\").\n\n"
+            "Gunakan Key JSON berikut secara persis (jangan terjemahkan nama key-nya):\n"
+            "- 'title': Judul lengkap dari dokumen (terjemahkan ke Bahasa Indonesia jika perlu).\n"
+            "- 'author': Nama penulis, pisahkan dengan koma.\n"
+            "- 'abstract': BACA TEKS ASLI LALU TERJEMAHKAN 100% KE BAHASA INDONESIA. DILARANG KERAS MENGGUNAKAN BAHASA INGGRIS. Jika teks asli mengandung istilah teknis (seperti rRNA/tRNA), biarkan istilahnya tapi terjemahkan kalimat penjelasnya.\n"
+            "- 'year': Tahun publikasi berupa angka (contoh: 2026).\n"
+            "- 'category': Wajib pilih salah satu dari: 'Penelitian', 'Pengabdian Kepada Masyarakat', 'Jurnal Internasional', 'Jurnal Internasional Bereputasi', 'Jurnal Nasional Terakreditasi (Sinta 1-5)', 'Seminar Nasional/Internasional', 'HKI'.\n"
+            "- 'theme': Wajib pilih salah satu dari: 'AI & Machine Learning', 'IoT & Smart Systems', 'Keamanan Data & Kriptografi', 'Data Science', 'Rekayasa Perangkat Lunak', 'HealthTech & IoMT', 'AgriTech', 'Gamifikasi & EdTech', 'Media Digital', 'GIS', 'Blockchain'. Jika tidak ada yang pas, pilih 'Lainnya'.\n\n"
+            f"KONTEN TEKS:\n{sample_text[:3000]}"
         )
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={
-                    "model": "llama3.2:latest",
+                    "model": "llama3.2",
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=60.0
+                timeout=300.0
             )
             
             raw_response = response.json()["response"].strip()
+            raw_response = re.sub(r"^```json\s*", "", raw_response, flags=re.IGNORECASE)
+            raw_response = re.sub(r"\s*```$", "", raw_response, flags=re.IGNORECASE)
+            
             clean_json_match = re.search(r"\{.*\}", raw_response, re.DOTALL)
             if clean_json_match:
                 raw_response = clean_json_match.group(0)
-                
-            metadata = json.loads(raw_response)
-            return metadata
+            
+            try:
+                metadata = json.loads(raw_response)
+                return metadata
+            except json.JSONDecodeError:
+                return {
+                    "title": "",
+                    "author": "",
+                    "abstract": "",
+                    "year": 2026,
+                    "category": "Penelitian",
+                    "theme": "AI"
+                }
             
     except Exception as e:
         traceback.print_exc()
@@ -292,30 +306,45 @@ async def chat_rag(request: ChatRequest):
         
         if context_str:
             prompt = (
-                f"Anda adalah sistem expert penemu kembali informasi riset Universitas Udayana.\n"
-                f"Tugas Anda adalah merangkum, menganalisis, dan menjelaskan isi penelitian kepada pengguna berdasarkan data KONTEKS yang ditemukan di bawah ini.\n"
-                f"Hubungkan isi konten dokumen dengan maksud pertanyaan pengguna secara cerdas dan informatif.\n\n"
+                f"Anda adalah sistem pakar analisis riset Universitas Udayana yang sangat terstruktur dan profesional.\n"
+                f"Tugas Anda adalah merangkum, menganalisis, dan menyintesis isi dokumen riset berdasarkan data KONTEKS yang ditemukan.\n\n"
+                f"FORMAT JAWABAN WAJIB:\n"
+                f"Gunakan format Markdown yang bersih dan rapi dengan struktur berikut:\n\n"
+                f"### RINGKASAN ANALISIS\n"
+                f"[Berikan deskripsi singkat 2-3 kalimat mengenai keterkaitan dokumen dengan pertanyaan pengguna]\n\n"
+                f"### TEMUAN UTAMA & KORELASI\n"
+                f"- **[Topik Kunci 1]**: Penjelasan mendalam mengenai temuan dari dokumen.\n"
+                f"- **[Topik Kunci 2]**: Penjelasan mendalam mengenai temuan dari dokumen.\n\n"
+                f"### INSIGHT & KESIMPULAN\n"
+                f"[Berikan kesimpulan sintesis atau arah riset lanjutan yang relevan]\n\n"
+                f"ATURAN TAMBAHAN:\n"
+                f"- Gunakan bullet points (`- `) untuk detail agar mudah dibaca.\n"
+                f"- Tebalkan kata kunci atau angka penting menggunakan `**kata**`.\n"
+                f"- Berikan jarak 1 baris kosong antar-section.\n"
+                f"- Jangan sebutkan kata 'Berdasarkan konteks yang diberikan' secara berulang. Langsung sintesis secara natural.\n\n"
                 f"KONTEKS DOKUMEN REPOSITORI:\n{context_str}\n\n"
                 f"PERTANYAAN PENGGUNA: {request.message}\n\n"
-                f"JAWABAN SINTESIS:"
+                f"JAWABAN SINTESIS TERSTRUKTUR:"
             )
         else:
             prompt = (
-                f"Anda adalah sistem expert penemu kembali informasi riset Universitas Udayana.\n"
-                f"Pertanyaan pengguna tidak memiliki dokumen relevan di database.\n\n"
+                f"Anda adalah sistem pakar analisis riset Universitas Udayana.\n"
+                f"Pertanyaan pengguna tidak memiliki dokumen ilmiah yang relevan di database repositori saat ini.\n\n"
+                f"### INFORMASI\n"
+                f"Jawab dengan sopan bahwa data spesifik tidak ditemukan di repositori, lalu berikan penjelasan umum atau saran kata kunci lain yang relevan secara terstruktur menggunakan poin-poin.\n\n"
                 f"PERTANYAAN PENGGUNA: {request.message}\n\n"
-                f"JAWABAN:"
+                f"JAWABAN TERSTRUKTUR:"
             )
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={
-                    "model": "llama3.2:latest",
+                    "model": "llama3.2",
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=120.0
+                timeout=300.0
             )
             ai_content = response.json()["response"]
             
